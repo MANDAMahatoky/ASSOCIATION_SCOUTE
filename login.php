@@ -1,4 +1,9 @@
 <?php
+require_once __DIR__ . '/config/db.php';
+require_once __DIR__ . '/SessionManager.php';
+
+$handler = new SessionManager(getDB());
+session_set_save_handler($handler, true);
 session_start();
 
 // Si déjà connecté, rediriger vers index
@@ -10,7 +15,6 @@ if (isset($_SESSION['utilisateur'])) {
 $erreur = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    require_once __DIR__ . '/config/db.php';
 
     $login = trim($_POST['login'] ?? '');
     $mdp   = trim($_POST['mot_de_passe'] ?? '');
@@ -20,19 +24,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         $st = getDB()->prepare("
             SELECT u.*, m.nom, m.prenom, m.type_membre
-            FROM UTILISATEUR u
-            JOIN MEMBRE m ON m.id_membre = u.id_membre
-            WHERE u.login = ? AND u.actif = 1
+            FROM utilisateur u
+            JOIN mpikambana m ON m.id_membre = u.id_membre
+            WHERE u.login = ? AND u.actif = TRUE
         ");
         $st->execute([$login]);
         $user = $st->fetch();
-
+	/*var_dump($user);
+	die();*/
         if (!$user || !password_verify($mdp, $user['mot_de_passe'])) {
             $erreur = 'Identifiant ou mot de passe incorrect.';
         } elseif (!in_array($user['type_membre'], ['kp', 'mpanabe'])) {
             $erreur = 'Accès réservé aux membres KP et Mpanabe.';
         } else {
-            // Connexion réussie
             $_SESSION['utilisateur'] = [
                 'id'          => $user['id_utilisateur'],
                 'id_membre'   => $user['id_membre'],
@@ -41,11 +45,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'prenom'      => $user['prenom'],
                 'type_membre' => $user['type_membre'],
             ];
-
-            // Mettre à jour la date de dernière connexion
-            $upd = getDB()->prepare("UPDATE UTILISATEUR SET derniere_connexion = NOW() WHERE id_utilisateur = ?");
+            $upd = getDB()->prepare("
+                UPDATE utilisateur 
+                SET derniere_connexion = NOW() 
+                WHERE id_utilisateur = ?
+            ");
             $upd->execute([$user['id_utilisateur']]);
-
             header('Location: index.php');
             exit;
         }
