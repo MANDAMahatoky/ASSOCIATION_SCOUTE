@@ -5,7 +5,8 @@ require_once __DIR__ . '/../../SessionManager.php';
 $handler = new SessionManager(getDB());
 session_set_save_handler($handler, true);
 session_start();
-
+/*var_dump($_SESSION['utilisateur']);
+die();*/
 if (!isset($_SESSION['utilisateur'])) { header('Location: ../../login.php'); exit; }
 
 $user = $_SESSION['utilisateur'];
