@@ -14,32 +14,52 @@ $db   = getDB();
 $msg    = '';
 $erreur = '';
 
-// Actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
     if ($action === 'retour') {
         $id_emprunt = (int)($_POST['id_emprunt'] ?? 0);
         if ($id_emprunt) {
-            $db->prepare("
-                UPDATE emprunt SET date_retour_effective = CURRENT_DATE WHERE id_emprunt=?
-            ")->execute([$id_emprunt]);
+            $db->prepare("UPDATE emprunt SET date_retour_effective = CURRENT_DATE WHERE id_emprunt=?")
+               ->execute([$id_emprunt]);
             $msg = 'retour';
         }
     } elseif ($action === 'ajouter') {
-        $id_materiel   = (int)($_POST['id_materiel'] ?? 0);
-        $id_responsable = (int)($_POST['id_responsable'] ?? 0);
-        $date_emprunt  = $_POST['date_emprunt'] ?? date('Y-m-d');
-        $date_retour   = $_POST['date_retour_prevue'] ?: null;
+        $id_materiel      = (int)($_POST['id_materiel'] ?? 0);
+        $id_responsable   = (int)($_POST['id_responsable'] ?? 0);
+        $date_emprunt     = $_POST['date_emprunt'] ?? date('Y-m-d');
+        $date_retour      = $_POST['date_retour_prevue'] ?: null;
+        $quantite_emprunt = (int)($_POST['quantite_emprunt'] ?? 1);
 
         if (!$id_materiel || !$id_responsable) {
             $erreur = 'Le matériel et le responsable sont obligatoires.';
+        } elseif ($quantite_emprunt < 1) {
+            $erreur = 'La quantité doit être au moins 1.';
         } else {
-            $db->prepare("
-                INSERT INTO emprunt (date_emprunt, date_retour_prevue, id_materiel, id_responsable)
-                VALUES (?, ?, ?, ?)
-            ")->execute([$date_emprunt, $date_retour, $id_materiel, $id_responsable]);
-            $msg = 'ajoute';
+            // Vérifier stock disponible
+            $stock = $db->prepare("
+                SELECT m.quantite,
+                       COALESCE(SUM(e.quantite_emprunt), 0) AS deja_emprunte
+                FROM materiel m
+                LEFT JOIN emprunt e ON e.id_materiel = m.id_materiel
+                    AND e.date_retour_effective IS NULL
+                WHERE m.id_materiel = ?
+                GROUP BY m.quantite
+            ");
+            $stock->execute([$id_materiel]);
+            $s = $stock->fetch();
+
+            $disponible = $s['quantite'] - $s['deja_emprunte'];
+
+            if ($quantite_emprunt > $disponible) {
+                $erreur = "Stock insuffisant — seulement $disponible disponible(s).";
+            } else {
+                $db->prepare("
+                    INSERT INTO emprunt (date_emprunt, date_retour_prevue, id_materiel, id_responsable, quantite_emprunt)
+                    VALUES (?, ?, ?, ?, ?)
+                ")->execute([$date_emprunt, $date_retour, $id_materiel, $id_responsable, $quantite_emprunt]);
+                $msg = 'ajoute';
+            }
         }
     }
 }
@@ -57,7 +77,8 @@ if ($filtre === 'en_cours') {
 
 $emprunts = $db->query("
     SELECT e.id_emprunt, e.date_emprunt, e.date_retour_prevue, e.date_retour_effective,
-           mat.nom AS materiel, mat.id_materiel,
+           e.quantite_emprunt,
+           mat.nom AS materiel, mat.quantite AS stock_total,
            m.nom || ' ' || m.prenom AS responsable
     FROM emprunt e
     JOIN materiel mat ON mat.id_materiel = e.id_materiel
@@ -66,8 +87,17 @@ $emprunts = $db->query("
     ORDER BY e.date_emprunt DESC
 ")->fetchAll();
 
-$materiels = $db->query("SELECT id_materiel, nom FROM materiel ORDER BY nom")->fetchAll();
-$membres   = $db->query("SELECT id_membre, nom, prenom FROM mpikambana ORDER BY nom")->fetchAll();
+// Matériels avec stock disponible
+$materiels = $db->query("
+    SELECT m.id_materiel, m.nom, m.quantite,
+           m.quantite - COALESCE(SUM(e.quantite_emprunt) FILTER (WHERE e.date_retour_effective IS NULL), 0) AS disponible
+    FROM materiel m
+    LEFT JOIN emprunt e ON e.id_materiel = m.id_materiel
+    GROUP BY m.id_materiel, m.nom, m.quantite
+    ORDER BY m.nom
+")->fetchAll();
+
+$membres = $db->query("SELECT id_membre, nom, prenom FROM mpikambana ORDER BY nom")->fetchAll();
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -125,6 +155,7 @@ $membres   = $db->query("SELECT id_membre, nom, prenom FROM mpikambana ORDER BY 
             <thead>
                 <tr>
                     <th>Matériel</th>
+                    <th>Qté empruntée</th>
                     <th>Responsable</th>
                     <th>Date emprunt</th>
                     <th>Retour prévu</th>
@@ -134,13 +165,14 @@ $membres   = $db->query("SELECT id_membre, nom, prenom FROM mpikambana ORDER BY 
             </thead>
             <tbody>
                 <?php if (empty($emprunts)): ?>
-                <tr><td colspan="6" style="text-align:center; color:var(--gris); padding:32px;">Aucun emprunt</td></tr>
+                <tr><td colspan="7" style="text-align:center; color:var(--gris); padding:32px;">Aucun emprunt</td></tr>
                 <?php else: ?>
                 <?php foreach ($emprunts as $e):
                     $en_retard = !$e['date_retour_effective'] && $e['date_retour_prevue'] && $e['date_retour_prevue'] < date('Y-m-d');
                 ?>
                 <tr>
                     <td><strong><?= htmlspecialchars($e['materiel']) ?></strong></td>
+                    <td style="text-align:center; font-weight:700;"><?= $e['quantite_emprunt'] ?></td>
                     <td><?= htmlspecialchars($e['responsable']) ?></td>
                     <td><?= date('d/m/Y', strtotime($e['date_emprunt'])) ?></td>
                     <td class="<?= $en_retard ? 'retard' : '' ?>">
@@ -188,9 +220,16 @@ $membres   = $db->query("SELECT id_membre, nom, prenom FROM mpikambana ORDER BY 
                         <select id="id_materiel" name="id_materiel" required>
                             <option value="">-- Choisir --</option>
                             <?php foreach ($materiels as $m): ?>
-                            <option value="<?= $m['id_materiel'] ?>"><?= htmlspecialchars($m['nom']) ?></option>
+                            <option value="<?= $m['id_materiel'] ?>">
+                                <?= htmlspecialchars($m['nom']) ?>
+                                (<?= $m['disponible'] ?>/<?= $m['quantite'] ?> disponible<?= $m['disponible'] > 1 ? 's' : '' ?>)
+                            </option>
                             <?php endforeach; ?>
                         </select>
+                    </div>
+                    <div class="champ">
+                        <label for="quantite_emprunt">Quantité *</label>
+                        <input type="number" id="quantite_emprunt" name="quantite_emprunt" min="1" value="1" required>
                     </div>
                     <div class="champ">
                         <label for="id_responsable">Responsable *</label>
