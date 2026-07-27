@@ -291,7 +291,7 @@ $nouveaux = $db->query("
             <h3>Membres</h3>
             <p>Liste et gestion de tous les membres</p>
         </a>
-        <a href="modules/membres/parrainage.php" class="module-card">
+        <a href="modules/parrainage/liste.php" class="module-card">
             <div class="module-icon">🤝</div>
             <h3>Parrainage</h3>
             <p>Liens mpanohana → beazina</p>
