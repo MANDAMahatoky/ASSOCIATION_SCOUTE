@@ -1,0 +1,284 @@
+<?php
+require_once __DIR__ . '/config/db.php';
+require_once __DIR__ . '/SessionManager.php';
+
+$handler = new SessionManager(getDB());
+session_set_save_handler($handler, true);
+session_start();
+
+if (!isset($_SESSION['utilisateur'])) {
+    header('Location: login.php');
+    exit;
+}
+
+$user = $_SESSION['utilisateur'];
+$db   = getDB();
+
+// ── STATISTIQUES ─────────────────────────────────────────────
+$stats = [];
+$stats['membres']     = $db->query("SELECT COUNT(*) FROM mpikambana")->fetchColumn();
+$stats['beazina']     = $db->query("SELECT COUNT(*) FROM mpikambana WHERE type_membre = 'beazina'")->fetchColumn();
+$stats['branches']    = $db->query("SELECT COUNT(*) FROM branche")->fetchColumn();
+$stats['hetsika']     = $db->query("SELECT COUNT(*) FROM hetsika WHERE DATE_TRUNC('month', date_debut) = DATE_TRUNC('month', CURRENT_DATE)")->fetchColumn();
+$stats['emprunts']    = $db->query("SELECT COUNT(*) FROM emprunt WHERE date_retour_effective IS NULL")->fetchColumn();
+$stats['cotisations'] = $db->query("SELECT COALESCE(SUM(montant), 0) FROM cotisation WHERE DATE_TRUNC('month', date_versement) = DATE_TRUNC('month', CURRENT_DATE)")->fetchColumn();
+$stats['a_reparer']   = $db->query("SELECT COUNT(*) FROM materiel WHERE etat = 'à réparer'")->fetchColumn();
+
+// Prochaines activités
+$prochaines = $db->query("
+    SELECT h.titre, h.date_debut, h.lieu, b.nom AS branche
+    FROM hetsika h
+    LEFT JOIN branche b ON b.id_branche = h.id_branche
+    WHERE h.date_debut >= CURRENT_DATE
+    ORDER BY h.date_debut ASC LIMIT 3
+")->fetchAll();
+
+// Derniers membres
+$nouveaux = $db->query("
+    SELECT nom, prenom, type_membre, branche
+    FROM mpikambana
+    ORDER BY id_membre DESC LIMIT 3
+")->fetchAll();
+?>
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tableau de bord — Association Scoute</title>
+    <link rel="stylesheet" href="assets/css/style.css">
+    <style>
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 14px;
+            margin-bottom: 8px;
+        }
+        .stat-card {
+            background: var(--blanc);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 18px 14px;
+            text-align: center;
+            text-decoration: none;
+            display: block;
+            transition: box-shadow .2s, transform .2s;
+        }
+        .stat-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.08); transform: translateY(-1px); }
+        .stat-card .stat-value { font-family:'Cinzel',serif; font-size:28px; font-weight:600; color:var(--vert2); line-height:1; }
+        .stat-card .stat-label { font-size:10px; color:var(--gris); text-transform:uppercase; letter-spacing:1px; margin-top:5px; }
+        .stat-card.warning .stat-value { color:var(--rouge); }
+        .stat-card.gold    .stat-value { color:var(--or); }
+
+        .panels { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:8px; }
+        @media(max-width:700px) { .panels { grid-template-columns:1fr; } }
+
+        .panel { background:var(--blanc); border:1px solid var(--border); border-radius:6px; overflow:hidden; }
+        .panel-header { background:var(--vert2); color:#fff; padding:10px 16px; font-family:'Cinzel',serif; font-size:11px; letter-spacing:1.5px; text-transform:uppercase; }
+        .panel-row { display:flex; align-items:center; justify-content:space-between; padding:10px 16px; border-bottom:1px solid var(--border); font-size:13px; }
+        .panel-row:last-child { border-bottom:none; }
+        .panel-row .label { color:var(--texte); font-weight:600; }
+        .panel-row .meta  { color:var(--gris); font-size:11px; }
+        .panel-empty { padding:20px 16px; color:var(--gris); font-size:13px; text-align:center; }
+    </style>
+</head>
+<body class="with-sidebar">
+
+<?php require_once __DIR__ . '/includes/sidebar.php'; ?>
+
+<div class="main-content">
+
+    <!-- TOPBAR -->
+    <div class="topbar">
+        <div class="topbar-left">
+            <button class="topbar-menu-btn" onclick="toggleSidebar()">☰</button>
+            <div class="topbar-breadcrumb">
+                <span class="current">Tableau de bord</span>
+            </div>
+        </div>
+        <div class="topbar-right">
+            <div class="topbar-user">
+                Bonjour, <strong><?= htmlspecialchars($user['prenom'] . ' ' . $user['nom']) ?></strong>
+                <span class="badge-type"><?= htmlspecialchars($user['type_membre']) ?></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+
+        <div class="welcome">
+            <h2>Tableau de bord</h2>
+            <p>Bienvenue dans l'espace de gestion du Fivondronana — <?= date('d/m/Y') ?></p>
+        </div>
+
+        <!-- STATISTIQUES -->
+        <div class="section-title">Chiffres clés</div>
+        <div class="stats-grid">
+            <a href="modules/membres/liste.php" class="stat-card">
+                <div class="stat-value"><?= $stats['membres'] ?></div>
+                <div class="stat-label">Membres</div>
+            </a>
+            <a href="modules/membres/liste.php?type=beazina" class="stat-card">
+                <div class="stat-value"><?= $stats['beazina'] ?></div>
+                <div class="stat-label">Beazina</div>
+            </a>
+            <a href="modules/branches/liste.php" class="stat-card">
+                <div class="stat-value"><?= $stats['branches'] ?></div>
+                <div class="stat-label">Branches</div>
+            </a>
+            <a href="modules/hetsika/liste.php" class="stat-card">
+                <div class="stat-value"><?= $stats['hetsika'] ?></div>
+                <div class="stat-label">Activités ce mois</div>
+            </a>
+            <a href="modules/materiel/emprunts.php" class="stat-card <?= $stats['emprunts'] > 0 ? 'warning' : '' ?>">
+                <div class="stat-value"><?= $stats['emprunts'] ?></div>
+                <div class="stat-label">Emprunts en cours</div>
+            </a>
+            <a href="modules/cotisations/liste.php" class="stat-card gold">
+                <div class="stat-value"><?= number_format($stats['cotisations'], 0, ',', ' ') ?></div>
+                <div class="stat-label">Ar cotisations (mois)</div>
+            </a>
+            <?php if ($stats['a_reparer'] > 0): ?>
+            <a href="modules/materiel/liste.php?etat=à+réparer" class="stat-card warning">
+                <div class="stat-value"><?= $stats['a_reparer'] ?></div>
+                <div class="stat-label">Matériel à réparer</div>
+            </a>
+            <?php endif; ?>
+        </div>
+
+        <!-- APERÇU RAPIDE -->
+        <div class="section-title">Aperçu rapide</div>
+        <div class="panels">
+            <div class="panel">
+                <div class="panel-header">Prochaines activités</div>
+                <?php if (empty($prochaines)): ?>
+                    <div class="panel-empty">Aucune activité à venir</div>
+                <?php else: ?>
+                    <?php foreach ($prochaines as $h): ?>
+                    <div class="panel-row">
+                        <div>
+                            <div class="label"><?= htmlspecialchars($h['titre']) ?></div>
+                            <div class="meta"><?= htmlspecialchars($h['lieu'] ?? '—') ?> · <?= htmlspecialchars($h['branche'] ?? '—') ?></div>
+                        </div>
+                        <div class="meta"><?= date('d/m', strtotime($h['date_debut'])) ?></div>
+                    </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">Derniers membres ajoutés</div>
+                <?php if (empty($nouveaux)): ?>
+                    <div class="panel-empty">Aucun membre enregistré</div>
+                <?php else: ?>
+                    <?php foreach ($nouveaux as $m): ?>
+                    <div class="panel-row">
+                        <div>
+                            <div class="label"><?= htmlspecialchars($m['nom'] . ' ' . $m['prenom']) ?></div>
+                            <div class="meta"><?= htmlspecialchars($m['branche'] ?? 'Fivondronana') ?></div>
+                        </div>
+                        <span class="badge badge-<?= $m['type_membre'] === 'ray aman-dreny' ? 'ray' : htmlspecialchars($m['type_membre']) ?>">
+                            <?= htmlspecialchars($m['type_membre']) ?>
+                        </span>
+                    </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <!-- MODULES -->
+        <div class="section-title">Organisation</div>
+        <div class="grid">
+            <a href="modules/vondrona/liste.php" class="module-card">
+                <div class="module-icon">🏕️</div>
+                <h3>Vondrona</h3>
+                <p>Groupements Tily et Mpanazava</p>
+            </a>
+            <a href="modules/branches/liste.php" class="module-card">
+                <div class="module-icon">🌿</div>
+                <h3>Branches</h3>
+                <p>Les 7 branches de l'association</p>
+            </a>
+        </div>
+
+        <div class="section-title">Membres</div>
+        <div class="grid">
+            <a href="modules/membres/liste.php" class="module-card">
+                <div class="module-icon">👥</div>
+                <h3>Membres</h3>
+                <p>Liste et gestion de tous les membres</p>
+            </a>
+            <a href="modules/parrainage/liste.php" class="module-card">
+                <div class="module-icon">🤝</div>
+                <h3>Parrainage FMT2S</h3>
+                <p>Soutien et mobilisation de ressources</p>
+            </a>
+        </div>
+
+        <div class="section-title">Activités</div>
+        <div class="grid">
+            <a href="modules/hetsika/liste.php" class="module-card">
+                <div class="module-icon">📅</div>
+                <h3>Hetsika</h3>
+                <p>Activités et événements</p>
+            </a>
+            <a href="modules/hetsika/presences.php" class="module-card">
+                <div class="module-icon">✅</div>
+                <h3>Présences</h3>
+                <p>Branches présentes aux activités</p>
+            </a>
+            <a href="modules/hetsika/recompenses.php" class="module-card">
+                <div class="module-icon">🏆</div>
+                <h3>Récompenses</h3>
+                <p>Coupes et prix remportés</p>
+            </a>
+        </div>
+
+        <div class="section-title">Progression</div>
+        <div class="grid">
+            <a href="modules/progression/ambaratonga.php" class="module-card">
+                <div class="module-icon">⭐</div>
+                <h3>Grades</h3>
+                <p>Ambaratonga & Dingana</p>
+            </a>
+            <a href="modules/progression/talenta.php" class="module-card">
+                <div class="module-icon">🎯</div>
+                <h3>Talents</h3>
+                <p>Talenta — compétences des beazina</p>
+            </a>
+        </div>
+
+        <div class="section-title">Matériel & Finances</div>
+        <div class="grid">
+            <a href="modules/materiel/liste.php" class="module-card">
+                <div class="module-icon">🎒</div>
+                <h3>Matériel</h3>
+                <p>Inventaire et suivi des équipements</p>
+            </a>
+            <a href="modules/materiel/emprunts.php" class="module-card">
+                <div class="module-icon">📦</div>
+                <h3>Emprunts</h3>
+                <p>Suivi des emprunts de matériel</p>
+            </a>
+            <a href="modules/cotisations/liste.php" class="module-card">
+                <div class="module-icon">💰</div>
+                <h3>Cotisations</h3>
+                <p>Versements et suivi financier</p>
+            </a>
+        </div>
+
+    </div>
+
+    <footer>Association Scoute &mdash; Fivondronana Antananarivo &mdash; <?= date('Y') ?></footer>
+
+</div>
+
+<script>
+function toggleSidebar() {
+    document.getElementById('sidebar').classList.toggle('open');
+    document.getElementById('sidebarOverlay').classList.toggle('open');
+}
+</script>
+
+</body>
+</html>
