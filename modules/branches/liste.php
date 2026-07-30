@@ -42,7 +42,7 @@ $msg = $_GET['msg'] ?? '';
     <title>Branches — Association Scoute</title>
     <link rel="stylesheet" href="../../assets/css/style.css">
 </head>
-<body class="with-nav">
+<body class="with-nav bg-vondrona">
 
 <nav>
     <div class="nav-brand"><span>⚜</span> Association Scoute</div>

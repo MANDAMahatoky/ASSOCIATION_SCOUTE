@@ -51,7 +51,7 @@ $v = $_SERVER['REQUEST_METHOD'] === 'POST' ? $_POST : $materiel;
     <link rel="stylesheet" href="../../assets/css/style.css">
     <style>.form-grid { display:grid; grid-template-columns:1fr 1fr; gap:0 20px; } @media(max-width:600px){.form-grid{grid-template-columns:1fr;}}</style>
 </head>
-<body class="with-nav">
+<body class="with-nav bg-materiel">
 
 <nav>
     <div class="nav-brand"><span>⚜</span> Association Scoute</div>

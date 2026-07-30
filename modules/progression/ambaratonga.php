@@ -111,7 +111,7 @@ $beazina = $db->query("
         .tab.actif { background:var(--vert2); color:#fff; border-color:var(--vert2); }
     </style>
 </head>
-<body class="with-nav">
+<body class="with-nav bg-talenta">
 
 <nav>
     <div class="nav-brand"><span>⚜</span> Association Scoute</div>

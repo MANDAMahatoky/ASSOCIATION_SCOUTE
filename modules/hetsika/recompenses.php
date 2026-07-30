@@ -77,7 +77,7 @@ $branches = $db->query("SELECT id_branche, nom FROM branche ORDER BY nom")->fetc
         #champ-membre, #champ-branche { display:none; }
     </style>
 </head>
-<body class="with-nav">
+<body class="with-nav bg-recompense">
 
 <nav>
     <div class="nav-brand"><span>⚜</span> Association Scoute</div>

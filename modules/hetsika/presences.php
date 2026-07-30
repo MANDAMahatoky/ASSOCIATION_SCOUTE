@@ -69,7 +69,7 @@ $total = array_sum(array_column($presences, 'nb_presents'));
     <title>Présences — <?= htmlspecialchars($hetsika['titre']) ?></title>
     <link rel="stylesheet" href="../../assets/css/style.css">
 </head>
-<body class="with-nav">
+<body class="with-nav bg-hetsika">
 
 <nav>
     <div class="nav-brand"><span>⚜</span> Association Scoute</div>

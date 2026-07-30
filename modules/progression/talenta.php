@@ -106,7 +106,7 @@ $beazina = $db->query("
         .talent-row:last-child { border-bottom: none; }
     </style>
 </head>
-<body class="with-nav">
+<body class="with-nav bg-talenta">
 
 <nav>
     <div class="nav-brand"><span>⚜</span> Association Scoute</div>

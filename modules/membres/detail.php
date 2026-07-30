@@ -152,7 +152,7 @@ $badge = match($m['type_membre']) {
         .mini-badge.actif { background: #e6f4ec; color: var(--vert2); }
     </style>
 </head>
-<body class="with-nav">
+<body class="with-nav bg-membres">
 
 <nav>
     <div class="nav-brand"><span>⚜</span> Association Scoute</div>

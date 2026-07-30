@@ -56,7 +56,7 @@ $v = $_SERVER['REQUEST_METHOD'] === 'POST' ? $_POST : $hetsika;
         @media (max-width:600px) { .form-grid { grid-template-columns: 1fr; } }
     </style>
 </head>
-<body class="with-nav">
+<body class="with-nav bg-hetsika">
 
 <nav>
     <div class="nav-brand"><span>⚜</span> Association Scoute</div>

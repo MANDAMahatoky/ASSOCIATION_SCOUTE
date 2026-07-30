@@ -5,11 +5,7 @@ require_once __DIR__ . '/SessionManager.php';
 $handler = new SessionManager(getDB());
 session_set_save_handler($handler, true);
 session_start();
-/*echo "<pre>";
-var_dump($_SESSION);
-echo "</pre>";
-die();*/
-// Protection : rediriger vers login si non connecté
+
 if (!isset($_SESSION['utilisateur'])) {
     header('Location: login.php');
     exit;
@@ -18,57 +14,26 @@ if (!isset($_SESSION['utilisateur'])) {
 $user = $_SESSION['utilisateur'];
 $db   = getDB();
 
-// ── STATISTIQUES EN TEMPS RÉEL ───────────────────────────────
-$stats = [];
+$stats['membres']     = $db->query("SELECT COUNT(*) FROM mpikambana")->fetchColumn();
+$stats['beazina']     = $db->query("SELECT COUNT(*) FROM mpikambana WHERE type_membre = 'beazina'")->fetchColumn();
+$stats['branches']    = $db->query("SELECT COUNT(*) FROM branche")->fetchColumn();
+$stats['hetsika']     = $db->query("SELECT COUNT(*) FROM hetsika WHERE DATE_TRUNC('month', date_debut) = DATE_TRUNC('month', CURRENT_DATE)")->fetchColumn();
+$stats['emprunts']    = $db->query("SELECT COUNT(*) FROM emprunt WHERE date_retour_effective IS NULL")->fetchColumn();
+$stats['cotisations'] = $db->query("SELECT COALESCE(SUM(montant), 0) FROM cotisation WHERE DATE_TRUNC('month', date_versement) = DATE_TRUNC('month', CURRENT_DATE)")->fetchColumn();
+$stats['a_reparer']   = $db->query("SELECT COUNT(*) FROM materiel WHERE etat = 'à réparer'")->fetchColumn();
 
-// Nombre total de membres
-$stats['membres'] = $db->query("SELECT COUNT(*) FROM mpikambana")->fetchColumn();
-
-// Nombre de beazina
-$stats['beazina'] = $db->query("SELECT COUNT(*) FROM mpikambana WHERE type_membre = 'beazina'")->fetchColumn();
-
-// Nombre de branches
-$stats['branches'] = $db->query("SELECT COUNT(*) FROM branche")->fetchColumn();
-
-// Nombre d'activités ce mois-ci
-$stats['hetsika'] = $db->query("
-    SELECT COUNT(*) FROM hetsika
-    WHERE DATE_TRUNC('month', date_debut) = DATE_TRUNC('month', CURRENT_DATE)
-")->fetchColumn();
-
-// Emprunts en cours (non retournés)
-$stats['emprunts'] = $db->query("
-    SELECT COUNT(*) FROM emprunt
-    WHERE date_retour_effective IS NULL
-")->fetchColumn();
-
-// Total cotisations ce mois-ci
-$stats['cotisations'] = $db->query("
-    SELECT COALESCE(SUM(montant), 0) FROM cotisation
-    WHERE DATE_TRUNC('month', date_versement) = DATE_TRUNC('month', CURRENT_DATE)
-")->fetchColumn();
-
-// Matériel à réparer
-$stats['a_reparer'] = $db->query("
-    SELECT COUNT(*) FROM materiel WHERE etat = 'à réparer'
-")->fetchColumn();
-
-// Dernières activités (3 prochaines)
 $prochaines = $db->query("
     SELECT h.titre, h.date_debut, h.lieu, b.nom AS branche
     FROM hetsika h
     LEFT JOIN branche b ON b.id_branche = h.id_branche
     WHERE h.date_debut >= CURRENT_DATE
-    ORDER BY h.date_debut ASC
-    LIMIT 3
+    ORDER BY h.date_debut ASC LIMIT 3
 ")->fetchAll();
 
-// Membres récemment ajoutés (3 derniers)
 $nouveaux = $db->query("
     SELECT nom, prenom, type_membre, branche
     FROM mpikambana
-    ORDER BY id_membre DESC
-    LIMIT 3
+    ORDER BY id_membre DESC LIMIT 3
 ")->fetchAll();
 ?>
 <!DOCTYPE html>
@@ -79,97 +44,49 @@ $nouveaux = $db->query("
     <title>Tableau de bord — Association Scoute</title>
     <link rel="stylesheet" href="assets/css/style.css">
     <style>
-        /* ── STATISTIQUES ── */
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
             gap: 16px;
             margin-bottom: 8px;
         }
-
         .stat-card {
-            background: var(--blanc);
+            background: rgba(255,255,255,0.92);
             border: 1px solid var(--border);
             border-radius: 6px;
             padding: 20px 16px;
             text-align: center;
+            text-decoration: none;
+            display: block;
+            transition: transform .2s;
         }
+        .stat-card:hover { transform: translateY(-2px); }
+        .stat-card .stat-value { font-family:'Cinzel',serif; font-size:32px; font-weight:600; color:var(--bleu); line-height:1; }
+        .stat-card .stat-label { font-size:11px; color:var(--gris); text-transform:uppercase; letter-spacing:1px; margin-top:6px; }
+        .stat-card.warning .stat-value { color:var(--rouge); }
+        .stat-card.gold    .stat-value { color:var(--accent); }
 
-        .stat-card .stat-value {
-            font-family: 'Cinzel', serif;
-            font-size: 32px;
-            font-weight: 600;
-            color: var(--vert2);
-            line-height: 1;
-        }
+        .panels { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-top:8px; }
+        @media (max-width:700px) { .panels { grid-template-columns:1fr; } }
 
-        .stat-card .stat-label {
-            font-size: 11px;
-            color: var(--gris);
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-top: 6px;
-        }
+        .panel { background:rgba(255,255,255,0.92); border:1px solid var(--border); border-radius:6px; overflow:hidden; }
+        .panel-header { background:var(--bleu); color:#fff; padding:10px 16px; font-family:'Cinzel',serif; font-size:11px; letter-spacing:1.5px; text-transform:uppercase; }
+        .panel-row { display:flex; align-items:center; justify-content:space-between; padding:10px 16px; border-bottom:1px solid var(--border); font-size:13px; }
+        .panel-row:last-child { border-bottom:none; }
+        .panel-row .label { color:var(--texte); font-weight:600; }
+        .panel-row .meta  { color:var(--gris); font-size:11px; }
+        .panel-empty { padding:20px 16px; color:var(--gris); font-size:13px; text-align:center; }
 
-        .stat-card.warning .stat-value { color: var(--rouge); }
-        .stat-card.gold    .stat-value { color: var(--or); }
-
-        /* ── PANNEAUX RAPIDES ── */
-        .panels {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            margin-top: 8px;
-        }
-
-        @media (max-width: 700px) { .panels { grid-template-columns: 1fr; } }
-
-        .panel {
-            background: var(--blanc);
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            overflow: hidden;
-        }
-
-        .panel-header {
-            background: var(--vert2);
-            color: #fff;
-            padding: 10px 16px;
-            font-family: 'Cinzel', serif;
-            font-size: 11px;
-            letter-spacing: 1.5px;
-            text-transform: uppercase;
-        }
-
-        .panel-body { padding: 0; }
-
-        .panel-row {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 10px 16px;
-            border-bottom: 1px solid var(--border);
-            font-size: 13px;
-        }
-
-        .panel-row:last-child { border-bottom: none; }
-
-        .panel-row .label { color: var(--texte); font-weight: 600; }
-        .panel-row .meta  { color: var(--gris); font-size: 11px; }
-        .panel-empty {
-            padding: 20px 16px;
-            color: var(--gris);
-            font-size: 13px;
-            text-align: center;
-        }
+        .module-card { background:rgba(255,255,255,0.92) !important; }
     </style>
 </head>
-<body class="with-nav">
+<body class="with-nav" style="background-image: linear-gradient(rgba(26,58,92,0.05), rgba(26,58,92,0.05)), url('/assets/images/principal.jpg'); background-size: cover; background-attachment: fixed; background-position: center;">
 
 <!-- NAVBAR -->
 <nav>
     <div class="nav-brand">
-        <span>⚜</span> Association Scoute
+        <img src="assets/images/logo.png" alt="Logo" height="36">
+        <span>Association Scoute</span>
     </div>
     <div class="nav-user">
         <span>Bonjour, <strong><?= htmlspecialchars($user['prenom'] . ' ' . $user['nom']) ?></strong></span>
@@ -178,7 +95,6 @@ $nouveaux = $db->query("
     </div>
 </nav>
 
-<!-- CONTENU -->
 <div class="container">
 
     <div class="welcome">
@@ -186,101 +102,90 @@ $nouveaux = $db->query("
         <p>Bienvenue dans l'espace de gestion du Fivondronana — <?= date('d/m/Y') ?></p>
     </div>
 
-    <!-- STATISTIQUES -->
     <div class="section-title">Chiffres clés</div>
     <div class="stats-grid">
-        <div class="stat-card">
+        <a href="modules/membres/liste.php" class="stat-card">
             <div class="stat-value"><?= $stats['membres'] ?></div>
             <div class="stat-label">Membres</div>
-        </div>
-        <div class="stat-card">
+        </a>
+        <a href="modules/membres/liste.php?type=beazina" class="stat-card">
             <div class="stat-value"><?= $stats['beazina'] ?></div>
             <div class="stat-label">Beazina</div>
-        </div>
-        <div class="stat-card">
+        </a>
+        <a href="modules/branches/liste.php" class="stat-card">
             <div class="stat-value"><?= $stats['branches'] ?></div>
             <div class="stat-label">Branches</div>
-        </div>
-        <div class="stat-card">
+        </a>
+        <a href="modules/hetsika/liste.php" class="stat-card">
             <div class="stat-value"><?= $stats['hetsika'] ?></div>
             <div class="stat-label">Activités ce mois</div>
-        </div>
-        <div class="stat-card <?= $stats['emprunts'] > 0 ? 'warning' : '' ?>">
+        </a>
+        <a href="modules/materiel/emprunts.php" class="stat-card <?= $stats['emprunts'] > 0 ? 'warning' : '' ?>">
             <div class="stat-value"><?= $stats['emprunts'] ?></div>
             <div class="stat-label">Emprunts en cours</div>
-        </div>
-        <div class="stat-card gold">
+        </a>
+        <a href="modules/cotisations/liste.php" class="stat-card gold">
             <div class="stat-value"><?= number_format($stats['cotisations'], 0, ',', ' ') ?></div>
             <div class="stat-label">Ar cotisations (mois)</div>
-        </div>
+        </a>
         <?php if ($stats['a_reparer'] > 0): ?>
-        <div class="stat-card warning">
+        <a href="modules/materiel/liste.php" class="stat-card warning">
             <div class="stat-value"><?= $stats['a_reparer'] ?></div>
             <div class="stat-label">Matériel à réparer</div>
-        </div>
+        </a>
         <?php endif; ?>
     </div>
 
-    <!-- PANNEAUX RAPIDES -->
     <div class="section-title">Aperçu rapide</div>
     <div class="panels">
-
-        <!-- Prochaines activités -->
         <div class="panel">
             <div class="panel-header">Prochaines activités</div>
-            <div class="panel-body">
-                <?php if (empty($prochaines)): ?>
-                    <div class="panel-empty">Aucune activité à venir</div>
-                <?php else: ?>
-                    <?php foreach ($prochaines as $h): ?>
-                    <div class="panel-row">
-                        <div>
-                            <div class="label"><?= htmlspecialchars($h['titre']) ?></div>
-                            <div class="meta"><?= htmlspecialchars($h['lieu'] ?? '—') ?> · <?= htmlspecialchars($h['branche'] ?? '—') ?></div>
-                        </div>
-                        <div class="meta"><?= date('d/m', strtotime($h['date_debut'])) ?></div>
+            <?php if (empty($prochaines)): ?>
+                <div class="panel-empty">Aucune activité à venir</div>
+            <?php else: ?>
+                <?php foreach ($prochaines as $h): ?>
+                <div class="panel-row">
+                    <div>
+                        <div class="label"><?= htmlspecialchars($h['titre']) ?></div>
+                        <div class="meta"><?= htmlspecialchars($h['lieu'] ?? '—') ?> · <?= htmlspecialchars($h['branche'] ?? '—') ?></div>
                     </div>
-                    <?php endforeach; ?>
-                <?php endif; ?>
-            </div>
+                    <div class="meta"><?= date('d/m', strtotime($h['date_debut'])) ?></div>
+                </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
         </div>
 
-        <!-- Nouveaux membres -->
         <div class="panel">
             <div class="panel-header">Derniers membres ajoutés</div>
-            <div class="panel-body">
-                <?php if (empty($nouveaux)): ?>
-                    <div class="panel-empty">Aucun membre enregistré</div>
-                <?php else: ?>
-                    <?php foreach ($nouveaux as $m): ?>
-                    <div class="panel-row">
-                        <div>
-                            <div class="label"><?= htmlspecialchars($m['nom'] . ' ' . $m['prenom']) ?></div>
-                            <div class="meta"><?= htmlspecialchars($m['branche'] ?? 'Fivondronana') ?></div>
-                        </div>
-                        <span class="badge badge-<?= htmlspecialchars($m['type_membre'] === 'ray aman-dreny' ? 'ray' : $m['type_membre']) ?>">
-                            <?= htmlspecialchars($m['type_membre']) ?>
-                        </span>
+            <?php if (empty($nouveaux)): ?>
+                <div class="panel-empty">Aucun membre enregistré</div>
+            <?php else: ?>
+                <?php foreach ($nouveaux as $m): ?>
+                <div class="panel-row">
+                    <div>
+                        <div class="label"><?= htmlspecialchars($m['nom'] . ' ' . $m['prenom']) ?></div>
+                        <div class="meta"><?= htmlspecialchars($m['branche'] ?? 'Fivondronana') ?></div>
                     </div>
-                    <?php endforeach; ?>
-                <?php endif; ?>
-            </div>
+                    <span class="badge badge-<?= $m['type_membre'] === 'ray aman-dreny' ? 'ray' : htmlspecialchars($m['type_membre']) ?>">
+                        <?= htmlspecialchars($m['type_membre']) ?>
+                    </span>
+                </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
         </div>
-
     </div>
 
-    <!-- MODULES -->
     <div class="section-title">Organisation</div>
     <div class="grid">
         <a href="modules/vondrona/liste.php" class="module-card">
             <div class="module-icon">🏕️</div>
             <h3>Vondrona</h3>
-            <p>Gérer les groupements Tily et Mpanazava</p>
+            <p>Groupements Tily et Mpanazava</p>
         </a>
         <a href="modules/branches/liste.php" class="module-card">
             <div class="module-icon">🌿</div>
             <h3>Branches</h3>
-            <p>Gérer les 7 branches de l'association</p>
+            <p>Les 7 branches de l'association</p>
         </a>
     </div>
 
@@ -293,8 +198,8 @@ $nouveaux = $db->query("
         </a>
         <a href="modules/parrainage/liste.php" class="module-card">
             <div class="module-icon">🤝</div>
-            <h3>Parrainage</h3>
-            <p>Liens mpanohana → beazina</p>
+            <h3>Parrainage FMT2S</h3>
+            <p>Soutien et mobilisation de ressources</p>
         </a>
     </div>
 
@@ -308,7 +213,7 @@ $nouveaux = $db->query("
         <a href="modules/hetsika/presences.php" class="module-card">
             <div class="module-icon">✅</div>
             <h3>Présences</h3>
-            <p>Enregistrer les branches présentes</p>
+            <p>Branches présentes aux activités</p>
         </a>
         <a href="modules/hetsika/recompenses.php" class="module-card">
             <div class="module-icon">🏆</div>
@@ -322,7 +227,7 @@ $nouveaux = $db->query("
         <a href="modules/progression/ambaratonga.php" class="module-card">
             <div class="module-icon">⭐</div>
             <h3>Grades</h3>
-            <p>Ambaratonga — niveaux des beazina</p>
+            <p>Ambaratonga & Dingana</p>
         </a>
         <a href="modules/progression/talenta.php" class="module-card">
             <div class="module-icon">🎯</div>
@@ -352,9 +257,7 @@ $nouveaux = $db->query("
 
 </div>
 
-<footer>
-    Association Scoute &mdash; Fivondronana Antananarivo &mdash; <?= date('Y') ?>
-</footer>
+<footer>Association Scoute &mdash; Fivondronana Antananarivo &mdash; <?= date('Y') ?></footer>
 
 </body>
 </html>

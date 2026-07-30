@@ -87,7 +87,7 @@ $msg = $_GET['msg'] ?? '';
         .statut-a_venir  { background: #EEEDFE; color: #3C3489; }
     </style>
 </head>
-<body class="with-nav">
+<body class="with-nav bg-recompense">
 
 <nav>
     <div class="nav-brand"><span>⚜</span> Association Scoute</div>

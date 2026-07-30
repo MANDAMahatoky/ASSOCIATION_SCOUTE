@@ -113,7 +113,7 @@ $membres = $db->query("SELECT id_membre, nom, prenom FROM mpikambana ORDER BY no
         .retard { color:var(--rouge); font-weight:700; }
     </style>
 </head>
-<body class="with-nav">
+<body class="with-nav bg-materiel">
 
 <nav>
     <div class="nav-brand"><span>⚜</span> Association Scoute</div>

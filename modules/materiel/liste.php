@@ -60,7 +60,7 @@ $msg = $_GET['msg'] ?? '';
         .filtres select { padding:8px 12px; font-size:13px; }
     </style>
 </head>
-<body class="with-nav">
+<body class="with-nav bg-materiel">
 
 <nav>
     <div class="nav-brand"><span>⚜</span> Association Scoute</div>

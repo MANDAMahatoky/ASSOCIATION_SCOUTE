@@ -64,7 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         #section-branche, #section-fivondronana { display: none; }
     </style>
 </head>
-<body class="with-nav">
+<body class="with-nav bg-membres">
 
 <nav>
     <div class="nav-brand"><span>⚜</span> Association Scoute</div>

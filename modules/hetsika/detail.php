@@ -80,7 +80,7 @@ if ($h['date_fin'] && $h['date_fin'] < $today) {
         .info-row .val { font-weight: 600; }
     </style>
 </head>
-<body class="with-nav">
+<body class="with-nav bg-hetsika">
 
 <nav>
     <div class="nav-brand"><span>⚜</span> Association Scoute</div>

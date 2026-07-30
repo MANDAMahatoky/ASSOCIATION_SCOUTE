@@ -157,7 +157,7 @@ $hetsika = $db->query("
         #champ-montant { display:none; }
     </style>
 </head>
-<body class="with-nav">
+<body class="with-nav bg-parrainage">
 
 <nav>
     <div class="nav-brand"><span>⚜</span> Association Scoute</div>

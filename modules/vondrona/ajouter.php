@@ -37,7 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <title>Ajouter Vondrona — Association Scoute</title>
     <link rel="stylesheet" href="../../assets/css/style.css">
 </head>
-<body class="with-nav">
+<body class="with-nav bg-vondrona">
 
 <nav>
     <div class="nav-brand"><span>⚜</span> Association Scoute</div>
